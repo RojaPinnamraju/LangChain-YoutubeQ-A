@@ -1,45 +1,13 @@
-import os
-import re
-import logging
-from typing import Optional, List
-import gradio as gr
 from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled
-from langchain.chains import ConversationalRetrievalChain
-from langchain.vectorstores import FAISS
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.memory import ConversationBufferMemory
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
+import re
+import os
 from dotenv import load_dotenv
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-
-# Get OpenRouter credentials from environment variables
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_API_BASE = os.getenv("OPENAI_API_BASE")
-
-if not OPENAI_API_KEY or not OPENAI_API_BASE:
-    raise ValueError("Please set OPENAI_API_KEY and OPENAI_API_BASE environment variables")
-
-# Initialize LLM with better parameters
-llm = ChatOpenAI(
-    model="openai/gpt-3.5-turbo",
-    temperature=0.2,
-    max_tokens=2500,
-    openai_api_key=OPENAI_API_KEY,
-    openai_api_base=OPENAI_API_BASE
-)
-
-# Use HuggingFace embeddings
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 def extract_video_id(url: str) -> str:
     """Extract YouTube video ID from URL."""
@@ -106,23 +74,4 @@ def answer_question(video_url: str, question: str) -> str:
         return response['text']
         
     except Exception as e:
-        return f"Error: {str(e)}"
-
-# Gradio UI
-iface = gr.Interface(
-    fn=answer_question,
-    inputs=[
-        gr.Textbox(label="YouTube Video URL", placeholder="Enter YouTube URL here..."),
-        gr.Textbox(label="Ask a Question", placeholder="What would you like to know about this video?")
-    ],
-    outputs="text",
-    title="🎥 YouTube Transcript Q&A",
-    description="Ask questions about the content of any YouTube video!",
-    examples=[
-        ["https://www.youtube.com/watch?v=dQw4w9WgXcQ", "What is the main topic of this video?"],
-        ["https://www.youtube.com/watch?v=dQw4w9WgXcQ", "Summarize the key points"]
-    ]
-)
-
-if __name__ == "__main__":
-    iface.launch() 
+        return f"Error: {str(e)}" 
