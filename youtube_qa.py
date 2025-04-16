@@ -22,31 +22,43 @@ def extract_video_id(url: str) -> str:
 def get_transcript(video_id: str) -> str:
     """Fetch transcript for a YouTube video."""
     try:
-        # First try to get English transcript
+        # List of languages to try (ordered by preference)
+        languages = [
+            'en', 'en-US', 'en-GB',  # English variants
+            'es', 'fr', 'de', 'it',  # European languages
+            'pt', 'ru', 'ja', 'ko',  # More languages
+            'zh', 'hi', 'ar', 'nl',  # Additional languages
+            'tr', 'pl', 'sv', 'fi',  # More European languages
+            'el', 'da', 'no', 'hu',  # Additional European languages
+            'cs', 'ro', 'bg', 'th',  # More languages
+            'vi', 'id', 'ms', 'he',  # Asian and Middle Eastern languages
+            'ta', 'te', 'bn'         # Indian languages
+        ]
+        
+        # First try to get a transcript in any of the supported languages
         try:
-            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
+            return " ".join([segment['text'] for segment in transcript_list])
         except NoTranscriptFound:
-            # If English not found, try to get any available transcript
+            # If no transcript found in preferred languages, try to get any available transcript
             try:
-                transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+                # Get list of all available transcripts
+                available_transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
+                
+                # Get the first available transcript
+                transcript = available_transcripts.find_transcript(languages)
+                transcript_list = transcript.fetch()
+                return " ".join([segment.text for segment in transcript_list])
+                
             except NoTranscriptFound:
-                return "No transcript is available for this video. The video might not have captions enabled."
+                return "No transcript is available for this video in any supported language."
             except TranscriptsDisabled:
                 return "Transcripts are disabled for this video."
             except VideoUnavailable:
                 return "This video is unavailable or private."
             except Exception as e:
                 return f"Error fetching transcript: {str(e)}"
-        except TranscriptsDisabled:
-            return "Transcripts are disabled for this video."
-        except VideoUnavailable:
-            return "This video is unavailable or private."
-        except Exception as e:
-            return f"Error fetching transcript: {str(e)}"
-        
-        # Combine all transcript segments
-        return " ".join([segment['text'] for segment in transcript_list])
-        
+                
     except Exception as e:
         return f"Unexpected error: {str(e)}"
 
@@ -75,6 +87,7 @@ def answer_question(video_url: str, question: str) -> str:
         prompt = ChatPromptTemplate.from_template("""
         You are a helpful assistant that answers questions about YouTube video content.
         Use the following transcript to answer the question. If the answer cannot be found in the transcript, say "I don't know".
+        The transcript might be in any language, but please answer in English.
 
         Transcript: {transcript}
 
