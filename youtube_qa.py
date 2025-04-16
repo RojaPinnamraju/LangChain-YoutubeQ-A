@@ -99,15 +99,38 @@ def get_transcript(video_url: str, max_retries: int = 3) -> str:
     
     return "Failed to fetch transcript after multiple attempts. Please try again later."
 
-def answer_question(video_url: str, question: str) -> str:
-    """Answer a question about a YouTube video's content."""
+def get_video_info(video_url: str) -> dict:
+    """Get video metadata (title, description) using yt-dlp."""
     try:
-        # Get transcript
-        transcript = get_transcript(video_url)
+        ydl_opts = {
+            'skip_download': True,
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        }
         
-        # Check if we got an error message instead of a transcript
-        if transcript.startswith(("No captions", "This video is", "Error fetching", "Error:", "Failed to fetch")):
-            return transcript
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+            return {
+                'title': info.get('title', ''),
+                'description': info.get('description', ''),
+                'uploader': info.get('uploader', ''),
+                'duration': info.get('duration', 0),
+                'view_count': info.get('view_count', 0),
+                'like_count': info.get('like_count', 0)
+            }
+    except Exception as e:
+        return {'error': str(e)}
+
+def answer_question(video_url: str, question: str) -> str:
+    """Answer a question about a YouTube video using available metadata."""
+    try:
+        # Get video information
+        video_info = get_video_info(video_url)
+        
+        if 'error' in video_info:
+            return f"Error getting video information: {video_info['error']}"
         
         # Initialize LLM
         llm = ChatOpenAI(
@@ -119,11 +142,15 @@ def answer_question(video_url: str, question: str) -> str:
         
         # Create prompt template
         prompt = ChatPromptTemplate.from_template("""
-        You are a helpful assistant that answers questions about YouTube video content.
-        Use the following transcript to answer the question. If the answer cannot be found in the transcript, say "I don't know".
-        The transcript might be in any language, but please answer in English.
-
-        Transcript: {transcript}
+        You are a helpful assistant that answers questions about YouTube videos.
+        Use the following video information to answer the question. If the answer cannot be found in the information, say "I don't know".
+        
+        Video Title: {title}
+        Channel: {uploader}
+        Description: {description}
+        Duration: {duration} seconds
+        Views: {view_count}
+        Likes: {like_count}
 
         Question: {question}
 
@@ -135,7 +162,12 @@ def answer_question(video_url: str, question: str) -> str:
         
         # Get answer
         response = chain.invoke({
-            "transcript": transcript,
+            "title": video_info['title'],
+            "uploader": video_info['uploader'],
+            "description": video_info['description'],
+            "duration": video_info['duration'],
+            "view_count": video_info['view_count'],
+            "like_count": video_info['like_count'],
             "question": question
         })
         
