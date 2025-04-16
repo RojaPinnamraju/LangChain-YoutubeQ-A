@@ -2,6 +2,10 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from youtube_qa import answer_question
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
