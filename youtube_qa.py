@@ -5,6 +5,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
 import re
 import os
+import requests
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -19,9 +20,21 @@ def extract_video_id(url: str) -> str:
         raise ValueError("Invalid YouTube URL")
     return match.group(1)
 
+def check_video_availability(video_id: str) -> bool:
+    """Check if a YouTube video is available and accessible."""
+    try:
+        response = requests.get(f"https://www.youtube.com/watch?v={video_id}")
+        return response.status_code == 200
+    except:
+        return False
+
 def get_transcript(video_id: str) -> str:
     """Fetch transcript for a YouTube video."""
     try:
+        # First check if video is available
+        if not check_video_availability(video_id):
+            return "This video is unavailable or private. Please check if the video exists and is publicly accessible."
+
         # List of languages to try (ordered by preference)
         languages = [
             'en', 'en-US', 'en-GB',  # English variants
@@ -35,8 +48,8 @@ def get_transcript(video_id: str) -> str:
             'ta', 'te', 'bn'         # Indian languages
         ]
         
-        # First try to get a transcript in any of the supported languages
         try:
+            # First try to get a transcript in any of the supported languages
             transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
             return " ".join([segment['text'] for segment in transcript_list])
         except NoTranscriptFound:
@@ -44,6 +57,9 @@ def get_transcript(video_id: str) -> str:
             try:
                 # Get list of all available transcripts
                 available_transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
+                
+                if not available_transcripts:
+                    return "No transcripts are available for this video. The video might not have captions enabled."
                 
                 # Get the first available transcript
                 transcript = available_transcripts.find_transcript(languages)
@@ -53,14 +69,14 @@ def get_transcript(video_id: str) -> str:
             except NoTranscriptFound:
                 return "No transcript is available for this video in any supported language."
             except TranscriptsDisabled:
-                return "Transcripts are disabled for this video."
+                return "Captions are disabled for this video. Please enable captions on YouTube to use this feature."
             except VideoUnavailable:
-                return "This video is unavailable or private."
+                return "This video is unavailable or private. Please check if the video exists and is publicly accessible."
             except Exception as e:
                 return f"Error fetching transcript: {str(e)}"
                 
     except Exception as e:
-        return f"Unexpected error: {str(e)}"
+        return f"Error: {str(e)}"
 
 def answer_question(video_url: str, question: str) -> str:
     """Answer a question about a YouTube video's content."""
@@ -72,7 +88,7 @@ def answer_question(video_url: str, question: str) -> str:
         transcript = get_transcript(video_id)
         
         # Check if we got an error message instead of a transcript
-        if transcript.startswith(("No transcript", "Transcripts are", "This video is", "Error fetching", "Unexpected error")):
+        if transcript.startswith(("No transcript", "Captions are", "This video is", "Error fetching", "Error:")):
             return transcript
         
         # Initialize LLM
