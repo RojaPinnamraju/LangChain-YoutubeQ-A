@@ -1,4 +1,5 @@
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled, VideoUnavailable
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
@@ -21,17 +22,33 @@ def extract_video_id(url: str) -> str:
 def get_transcript(video_id: str) -> str:
     """Fetch transcript for a YouTube video."""
     try:
-        # Try to get transcript in English first
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
-    except:
+        # First try to get English transcript
         try:
-            # If English fails, try to get any available transcript
-            transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+            transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+        except NoTranscriptFound:
+            # If English not found, try to get any available transcript
+            try:
+                transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+            except NoTranscriptFound:
+                return "No transcript is available for this video. The video might not have captions enabled."
+            except TranscriptsDisabled:
+                return "Transcripts are disabled for this video."
+            except VideoUnavailable:
+                return "This video is unavailable or private."
+            except Exception as e:
+                return f"Error fetching transcript: {str(e)}"
+        except TranscriptsDisabled:
+            return "Transcripts are disabled for this video."
+        except VideoUnavailable:
+            return "This video is unavailable or private."
         except Exception as e:
-            raise Exception(f"Could not fetch transcript: {str(e)}")
-    
-    # Combine all transcript segments
-    return " ".join([segment['text'] for segment in transcript_list])
+            return f"Error fetching transcript: {str(e)}"
+        
+        # Combine all transcript segments
+        return " ".join([segment['text'] for segment in transcript_list])
+        
+    except Exception as e:
+        return f"Unexpected error: {str(e)}"
 
 def answer_question(video_url: str, question: str) -> str:
     """Answer a question about a YouTube video's content."""
@@ -41,6 +58,10 @@ def answer_question(video_url: str, question: str) -> str:
         
         # Get transcript
         transcript = get_transcript(video_id)
+        
+        # Check if we got an error message instead of a transcript
+        if transcript.startswith(("No transcript", "Transcripts are", "This video is", "Error fetching", "Unexpected error")):
+            return transcript
         
         # Initialize LLM
         llm = ChatOpenAI(
