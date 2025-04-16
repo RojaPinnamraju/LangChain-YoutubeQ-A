@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Transcript Q&A</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎥 YouTube Transcript Q&A</h1>
+            <p>Ask questions about any YouTube video's content</p>
+        </header>
+
+        <main>
+            <div class="input-section">
+                <div class="input-group">
+                    <label for="video-url">YouTube Video URL</label>
+                    <input type="text" id="video-url" placeholder="Enter YouTube URL here...">
+                </div>
+                
+                <div class="input-group">
+                    <label for="question">Your Question</label>
+                    <textarea id="question" placeholder="What would you like to know about this video?"></textarea>
+                </div>
+                
+                <button id="ask-button">Ask Question</button>
+            </div>
+
+            <div class="result-section">
+                <div class="loading" id="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Analyzing video and generating answer...</p>
+                </div>
+                
+                <div class="answer" id="answer" style="display: none;">
+                    <h2>Answer</h2>
+                    <div class="answer-content" id="answer-content"></div>
+                </div>
+                
+                <div class="error" id="error" style="display: none;">
+                    <h2>Error</h2>
+                    <div class="error-content" id="error-content"></div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by LangChain and OpenAI</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html> 
