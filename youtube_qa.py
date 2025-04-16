@@ -46,7 +46,7 @@ def get_transcript(video_url: str, max_retries: int = 3) -> str:
                 'quiet': True,
                 'no_warnings': True,
                 'extract_flat': False,
-                'cookiesfrombrowser': ('chrome',),  # Use cookies from Chrome to avoid bot detection
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             }
 
             # Try to get transcript
