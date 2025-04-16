@@ -1,5 +1,4 @@
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled, VideoUnavailable
+from youtube_dl import YoutubeDL
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
@@ -29,53 +28,60 @@ def check_video_availability(video_id: str) -> bool:
     except:
         return False
 
-def get_transcript(video_id: str, max_retries: int = 3) -> str:
-    """Fetch transcript for a YouTube video with retry logic."""
+def get_transcript(video_url: str, max_retries: int = 3) -> str:
+    """Fetch transcript for a YouTube video using youtube-dl."""
     for attempt in range(max_retries):
         try:
             # First check if video is available
+            video_id = extract_video_id(video_url)
             if not check_video_availability(video_id):
                 return "This video is unavailable or private. Please check if the video exists and is publicly accessible."
 
-            # List of languages to try (ordered by preference)
-            languages = [
-                'en', 'en-US', 'en-GB',  # English variants
-                'a.en',  # Auto-generated English
-                'es', 'fr', 'de', 'it',  # European languages
-                'pt', 'ru', 'ja', 'ko',  # More languages
-                'zh', 'hi', 'ar', 'nl',  # Additional languages
-                'tr', 'pl', 'sv', 'fi',  # More European languages
-                'el', 'da', 'no', 'hu',  # Additional European languages
-                'cs', 'ro', 'bg', 'th',  # More languages
-                'vi', 'id', 'ms', 'he',  # Asian and Middle Eastern languages
-                'ta', 'te', 'bn'         # Indian languages
-            ]
-            
-            # First try to get a transcript in any of the supported languages
-            try:
-                transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
-                return " ".join([segment['text'] for segment in transcript_list])
-            except NoTranscriptFound:
-                # If no transcript found in preferred languages, try to get any available transcript
+            # Configure youtube-dl options
+            ydl_opts = {
+                'writesubtitles': True,
+                'writeautomaticsub': True,
+                'subtitleslangs': ['en', 'a.en'],
+                'skip_download': True,
+                'quiet': True,
+            }
+
+            # Try to get transcript
+            with YoutubeDL(ydl_opts) as ydl:
                 try:
-                    # Get list of all available transcripts
-                    available_transcripts = YouTubeTranscriptApi.list_transcripts(video_id)
+                    # Get video info
+                    info = ydl.extract_info(video_url, download=False)
                     
-                    if not available_transcripts:
-                        return "No transcripts are available for this video. The video might not have captions enabled."
-                    
-                    # Get the first available transcript
-                    transcript = available_transcripts.find_transcript(languages)
-                    transcript_list = transcript.fetch()
-                    return " ".join([segment.text for segment in transcript_list])
-                    
-                except NoTranscriptFound:
-                    if attempt == max_retries - 1:
-                        return "No transcript is available for this video in any supported language."
-                except TranscriptsDisabled:
-                    return "Captions are disabled for this video. Please enable captions on YouTube to use this feature."
-                except VideoUnavailable:
-                    return "This video is unavailable or private. Please check if the video exists and is publicly accessible."
+                    # Check if subtitles are available
+                    if 'subtitles' in info or 'automatic_captions' in info:
+                        # Try to get English subtitles first
+                        if 'subtitles' in info and 'en' in info['subtitles']:
+                            subtitle_url = info['subtitles']['en'][0]['url']
+                        # Then try auto-generated English
+                        elif 'automatic_captions' in info and 'a.en' in info['automatic_captions']:
+                            subtitle_url = info['automatic_captions']['a.en'][0]['url']
+                        else:
+                            # Try to get any available subtitle
+                            available_subs = info.get('subtitles', {}) or info.get('automatic_captions', {})
+                            if available_subs:
+                                first_lang = list(available_subs.keys())[0]
+                                subtitle_url = available_subs[first_lang][0]['url']
+                            else:
+                                return "No captions are available for this video. The video might not have captions enabled."
+                        
+                        # Download and parse the subtitle file
+                        response = requests.get(subtitle_url)
+                        if response.status_code == 200:
+                            # Parse the subtitle content (assuming it's in a simple format)
+                            lines = response.text.split('\n')
+                            transcript = ' '.join([line.strip() for line in lines if line.strip() and not line.strip().isdigit()])
+                            return transcript
+                        else:
+                            if attempt == max_retries - 1:
+                                return "Failed to download captions. Please try again later."
+                    else:
+                        return "No captions are available for this video. The video might not have captions enabled."
+                        
                 except Exception as e:
                     if attempt == max_retries - 1:
                         return f"Error fetching transcript: {str(e)}"
@@ -93,14 +99,11 @@ def get_transcript(video_id: str, max_retries: int = 3) -> str:
 def answer_question(video_url: str, question: str) -> str:
     """Answer a question about a YouTube video's content."""
     try:
-        # Extract video ID
-        video_id = extract_video_id(video_url)
-        
         # Get transcript
-        transcript = get_transcript(video_id)
+        transcript = get_transcript(video_url)
         
         # Check if we got an error message instead of a transcript
-        if transcript.startswith(("No transcript", "Captions are", "This video is", "Error fetching", "Error:", "Failed to fetch")):
+        if transcript.startswith(("No captions", "This video is", "Error fetching", "Error:", "Failed to fetch")):
             return transcript
         
         # Initialize LLM
