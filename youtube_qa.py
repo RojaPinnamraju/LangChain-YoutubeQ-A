@@ -1,4 +1,4 @@
-from youtube_dl import YoutubeDL
+from yt_dlp import YoutubeDL
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
@@ -29,7 +29,7 @@ def check_video_availability(video_id: str) -> bool:
         return False
 
 def get_transcript(video_url: str, max_retries: int = 3) -> str:
-    """Fetch transcript for a YouTube video using youtube-dl."""
+    """Fetch transcript for a YouTube video using yt-dlp."""
     for attempt in range(max_retries):
         try:
             # First check if video is available
@@ -37,13 +37,16 @@ def get_transcript(video_url: str, max_retries: int = 3) -> str:
             if not check_video_availability(video_id):
                 return "This video is unavailable or private. Please check if the video exists and is publicly accessible."
 
-            # Configure youtube-dl options
+            # Configure yt-dlp options
             ydl_opts = {
                 'writesubtitles': True,
                 'writeautomaticsub': True,
                 'subtitleslangs': ['en', 'a.en'],
                 'skip_download': True,
                 'quiet': True,
+                'no_warnings': True,
+                'extract_flat': False,
+                'cookiesfrombrowser': ('chrome',),  # Use cookies from Chrome to avoid bot detection
             }
 
             # Try to get transcript
